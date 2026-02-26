@@ -37,6 +37,24 @@ const ProgressBar = ({ progress }: { progress: number }) => (
   </div>
 );
 
+// --- Storage Service ---
+const STORAGE_KEYS = {
+  TASKS: 'levelup_tasks',
+  FINANCE: 'levelup_finance',
+  SKILLS: 'levelup_skills',
+  VIDEOS: 'levelup_videos'
+};
+
+const Storage = {
+  get: <T,>(key: string, defaultValue: T): T => {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : defaultValue;
+  },
+  set: (key: string, value: any) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+};
+
 // --- Views ---
 
 const TasksView = () => {
@@ -44,38 +62,37 @@ const TasksView = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'Medium' as const });
 
-  const fetchTasks = async () => {
-    const res = await fetch('/api/tasks');
-    const data = await res.json();
-    setTasks(data.map((t: any) => ({ ...t, completed: !!t.completed })));
+  useEffect(() => {
+    setTasks(Storage.get(STORAGE_KEYS.TASKS, []));
+  }, []);
+
+  const saveTasks = (newTasks: Task[]) => {
+    setTasks(newTasks);
+    Storage.set(STORAGE_KEYS.TASKS, newTasks);
   };
 
-  useEffect(() => { fetchTasks(); }, []);
-
-  const addTask = async () => {
+  const addTask = () => {
     if (!newTask.title) return;
-    await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newTask, date: new Date().toISOString() })
-    });
+    const task: Task = {
+      id: Date.now(),
+      ...newTask,
+      date: new Date().toISOString(),
+      completed: false
+    };
+    saveTasks([...tasks, task].sort((a, b) => {
+      const pMap = { High: 1, Medium: 2, Low: 3 };
+      return pMap[a.priority] - pMap[b.priority];
+    }));
     setNewTask({ title: '', description: '', priority: 'Medium' });
     setShowAdd(false);
-    fetchTasks();
   };
 
-  const toggleTask = async (id: number, completed: boolean) => {
-    await fetch(`/api/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ completed: !completed })
-    });
-    fetchTasks();
+  const toggleTask = (id: number) => {
+    saveTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
   };
 
-  const deleteTask = async (id: number) => {
-    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
-    fetchTasks();
+  const deleteTask = (id: number) => {
+    saveTasks(tasks.filter(t => t.id !== id));
   };
 
   const completedCount = tasks.filter(t => t.completed).length;
@@ -113,7 +130,7 @@ const TasksView = () => {
             animate={{ opacity: 1, y: 0 }}
           >
             <Card className="flex items-center gap-4 group">
-              <button onClick={() => toggleTask(task.id, task.completed)}>
+              <button onClick={() => toggleTask(task.id)}>
                 {task.completed ? (
                   <CheckCircle2 className="text-brand-orange" size={24} />
                 ) : (
@@ -198,28 +215,28 @@ const FinanceView = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [newItem, setNewItem] = useState({ type: 'Expense' as const, amount: '', category: '', note: '' });
 
-  const fetchFinance = async () => {
-    const res = await fetch('/api/finance');
-    const data = await res.json();
-    setItems(data);
+  useEffect(() => {
+    setItems(Storage.get(STORAGE_KEYS.FINANCE, []));
+  }, []);
+
+  const saveFinance = (newItems: FinanceItem[]) => {
+    setItems(newItems);
+    Storage.set(STORAGE_KEYS.FINANCE, newItems);
   };
 
-  useEffect(() => { fetchFinance(); }, []);
-
-  const addItem = async () => {
+  const addItem = () => {
     if (!newItem.amount) return;
-    await fetch('/api/finance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        ...newItem, 
-        amount: parseFloat(newItem.amount),
-        date: new Date().toISOString() 
-      })
-    });
+    const item: FinanceItem = {
+      id: Date.now(),
+      type: newItem.type,
+      amount: parseFloat(newItem.amount),
+      category: newItem.category,
+      note: newItem.note,
+      date: new Date().toISOString()
+    };
+    saveFinance([item, ...items]);
     setNewItem({ type: 'Expense', amount: '', category: '', note: '' });
     setShowAdd(false);
-    fetchFinance();
   };
 
   const totalIncome = items.filter(i => i.type === 'Income').reduce((acc, i) => acc + i.amount, 0);
@@ -386,50 +403,44 @@ const SkillsView = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
 
-  const fetchSkills = async () => {
-    const res = await fetch('/api/skills');
-    const data = await res.json();
-    setSkills(data.map((s: any) => ({ ...s, completed: !!s.completed })));
+  useEffect(() => {
+    setSkills(Storage.get(STORAGE_KEYS.SKILLS, []));
+  }, []);
+
+  const saveSkills = (newSkills: Skill[]) => {
+    setSkills(newSkills);
+    Storage.set(STORAGE_KEYS.SKILLS, newSkills);
   };
 
-  useEffect(() => { fetchSkills(); }, []);
-
-  const addSkill = async () => {
+  const addSkill = () => {
     if (!newName) return;
-    await fetch('/api/skills', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName })
-    });
+    const skill: Skill = {
+      id: Date.now(),
+      name: newName,
+      timeSpent: 0,
+      streak: 0,
+      completed: false,
+      lastUpdated: new Date().toISOString()
+    };
+    saveSkills([...skills, skill]);
     setNewName('');
     setShowAdd(false);
-    fetchSkills();
   };
 
-  const updateSkill = async (skill: Skill, minutes: number) => {
+  const updateSkill = (skill: Skill, minutes: number) => {
     const today = new Date().toISOString().split('T')[0];
     const isNewDay = skill.lastUpdated?.split('T')[0] !== today;
     
-    await fetch(`/api/skills/${skill.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        ...skill, 
-        timeSpent: skill.timeSpent + minutes,
-        streak: isNewDay ? skill.streak + 1 : skill.streak,
-        lastUpdated: new Date().toISOString()
-      })
-    });
-    fetchSkills();
+    saveSkills(skills.map(s => s.id === skill.id ? {
+      ...s,
+      timeSpent: s.timeSpent + minutes,
+      streak: isNewDay ? s.streak + 1 : s.streak,
+      lastUpdated: new Date().toISOString()
+    } : s));
   };
 
-  const toggleSkillCompleted = async (skill: Skill) => {
-    await fetch(`/api/skills/${skill.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...skill, completed: !skill.completed })
-    });
-    fetchSkills();
+  const toggleSkillCompleted = (skill: Skill) => {
+    saveSkills(skills.map(s => s.id === skill.id ? { ...s, completed: !s.completed } : s));
   };
 
   return (
@@ -522,33 +533,29 @@ const VideosView = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [newVideo, setNewVideo] = useState({ title: '', link: '', category: 'Learning' });
 
-  const fetchVideos = async () => {
-    const res = await fetch('/api/videos');
-    const data = await res.json();
-    setVideos(data.map((v: any) => ({ ...v, watched: !!v.watched })));
+  useEffect(() => {
+    setVideos(Storage.get(STORAGE_KEYS.VIDEOS, []));
+  }, []);
+
+  const saveVideos = (newVideos: Video[]) => {
+    setVideos(newVideos);
+    Storage.set(STORAGE_KEYS.VIDEOS, newVideos);
   };
 
-  useEffect(() => { fetchVideos(); }, []);
-
-  const addVideo = async () => {
+  const addVideo = () => {
     if (!newVideo.title || !newVideo.link) return;
-    await fetch('/api/videos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newVideo)
-    });
+    const video: Video = {
+      id: Date.now(),
+      ...newVideo,
+      watched: false
+    };
+    saveVideos([...videos, video]);
     setNewVideo({ title: '', link: '', category: 'Learning' });
     setShowAdd(false);
-    fetchVideos();
   };
 
-  const toggleWatched = async (id: number, watched: boolean) => {
-    await fetch(`/api/videos/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ watched: !watched })
-    });
-    fetchVideos();
+  const toggleWatched = (id: number) => {
+    saveVideos(videos.map(v => v.id === id ? { ...v, watched: !v.watched } : v));
   };
 
   const filteredVideos = videos.filter(v => 
@@ -590,7 +597,7 @@ const VideosView = () => {
                 {video.category}
               </span>
               <button 
-                onClick={() => toggleWatched(video.id, video.watched)}
+                onClick={() => toggleWatched(video.id)}
                 className={`text-xs font-bold px-3 py-1 rounded-full transition-colors ${
                   video.watched ? 'bg-emerald-500/20 text-emerald-500' : 'bg-white/5 text-white/40'
                 }`}
